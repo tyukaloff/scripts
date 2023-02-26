@@ -1,0 +1,49 @@
+#!/bin/sh
+#Update package repositories
+apt update
+#Install bind9 package
+apt install bind9 dnsutils -y
+
+#Create a new forward zone file for tyukaloff.org
+echo "zone \"tyukaloff.org\" {
+    type master;
+    file \"/etc/bind/db.tyukaloff.org\";
+};" >> /etc/bind/named.conf.local
+
+#Create the forward zone file
+echo "\$TTL    604800
+@       IN      SOA     ns1.tyukaloff.org. root.tyukaloff.org. (
+                              2         ; Serial
+                         604800         ; Refresh
+                          86400         ; Retry
+                        2419200         ; Expire
+                         604800 )       ; Negative Cache TTL
+;
+@       IN      NS      ns1.tyukaloff.org.
+@       IN      A       192.168.1.1
+ns1     IN      A       192.168.1.1
+www     IN      A       192.168.1.1" > /etc/bind/db.tyukaloff.org
+
+#Create a new reverse zone file for 192.168.1.0/24
+echo "zone \"1.168.192.in-addr.arpa\" {
+    type master;
+    file \"/etc/bind/db.192.168.1\";
+};" >> /etc/bind/named.conf.local
+
+#Create the reverse zone file
+echo "\$TTL    604800
+@       IN      SOA     ns1.tyukaloff.org. root.tyukaloff.org. (
+                              2         ; Serial
+                         604800         ; Refresh
+                          86400         ; Retry
+                        2419200         ; Expire
+                         604800 )       ; Negative Cache TTL
+;
+@       IN      NS      ns1.tyukaloff.org.
+1       IN      PTR     ns1.tyukaloff.org." > /etc/bind/db.192.168.1
+
+#Restart bind9 service
+systemctl restart bind9
+
+#check configuration
+named-checkconf /etc/bind/named.conf
