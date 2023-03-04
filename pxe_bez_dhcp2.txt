@@ -1,0 +1,242 @@
+#!/bin/sh
+#Система должна быть обновлена, настроен dhcp, скачан образ grub и распакован iso образ в Загрузки в папку AL_SE_1.7.3
+#Установка пакетов
+ apt install apache2 tftpd-hpa pxelinux syslinux  -y
+
+#Настройка Apache2
+ sed -i 's/# AstraMode on/AstraMode off/' /etc/apache2/apache2.conf
+ chmod 755 /var/www/html
+ chown www-data:www-data /var/www/html
+
+#Создать папку для образа
+ mkdir -p /var/www/html/repo
+ mkdir -p /var/www/html/repo/se
+
+#Распаковнный образ копируется в директорию apache2
+ cp /home/astra/Загрузки/AL_SE_1.7.3/* /var/www/html/repo/se -r
+
+#Копирование файлов linux и initrd.gz из распакованного образа в папку tftp
+ mkdir /srv/tftp/se/
+ cp /home/astra/Загрузки/AL_SE_1.7.3/netinst/linux /srv/tftp/se/
+ cp /home/astra/Загрузки/AL_SE_1.7.3/netinst/initrd.gz /srv/tftp/se/
+
+#Копирование в каталог /srv/tftp файл pxelinux.0 и необходимые библиотеки syslinux из установленной ОС:
+ cp /usr/lib/PXELINUX/pxelinux.0 /srv/tftp/
+ cp /usr/lib/syslinux/modules/bios/{chain.c32,ldlinux.c32,libcom32.c32,libutil.c32,menu.c32} /srv/tftp/
+
+#Настройка pxelinux.cfg
+ mkdir -p /srv/tftp/pxelinux.cfg
+ touch /srv/tftp/pxelinux.cfg/default
+ echo 'ui menu.c32' >> /srv/tftp/pxelinux.cfg/default
+ echo 'PROMPT 0' >> /srv/tftp/pxelinux.cfg/default
+ echo '#' >> /srv/tftp/pxelinux.cfg/default
+ echo 'MENU TITLE PXE Boot menu' >> /srv/tftp/pxelinux.cfg/default
+ echo 'TIMEOUT 50' >> /srv/tftp/pxelinux.cfg/default
+ echo 'DEFAULT local' >> /srv/tftp/pxelinux.cfg/default
+ echo '#' >> /srv/tftp/pxelinux.cfg/default
+ echo 'LABEL local' >> /srv/tftp/pxelinux.cfg/default
+ echo '    MENU LABEL Boot from local drive' >> /srv/tftp/pxelinux.cfg/default
+ echo '    kernel chain.c32' >> /srv/tftp/pxelinux.cfg/default
+ echo '    append hd0' >> /srv/tftp/pxelinux.cfg/default
+ echo '# Astra Linux Special Edition' >> /srv/tftp/pxelinux.cfg/default
+ echo 'LABEL netinstall' >> /srv/tftp/pxelinux.cfg/default
+ echo '    MENU LABEL Start Astra Linux SE net install' >> /srv/tftp/pxelinux.cfg/default
+ echo '    kernel se/linux' >> /srv/tftp/pxelinux.cfg/default
+ echo '    append initrd=se/initrd.gz modprobe.blacklist=evbug auto=true priority=critical debian-installer/locale=en_US console-keymaps-at/keymap=ru hostname=astra domain=tyukaloff.org astra-license/license=true url=tftp://192.168.2.253/se/preseed.cfg interface=auto netcfg/dhcp_timeout=60 astra_install=1 vga=788 debian-installer/allow_unauthenticated=true' >> /srv/tftp/pxelinux.cfg/default
+
+#Распаковка образа загрузчика GRUB и его настройка
+ tar xvf Загрузки/netinst.tar.gz -C /srv/tftp
+ rm  /srv/tftp/debian-installer/amd64/grub/grub.cfg
+ touch /srv/tftp/debian-installer/amd64/grub/grub.cfg
+
+ echo 'if loadfont $prefix/font.pf2 ; then' >> /srv/tftp/debian-installer/amd64/grub/grub.cfg
+ echo '  set gfxmode=800x600' >> /srv/tftp/debian-installer/amd64/grub/grub.cfg
+ echo '  set gfxpayload=keep' >> /srv/tftp/debian-installer/amd64/grub/grub.cfg
+ echo '  insmod efi_gop' >> /srv/tftp/debian-installer/amd64/grub/grub.cfg
+ echo '  insmod efi_uga' >> /srv/tftp/debian-installer/amd64/grub/grub.cfg
+ echo '  insmod video_bochs' >> /srv/tftp/debian-installer/amd64/grub/grub.cfg
+ echo '  insmod video_cirrus' >> /srv/tftp/debian-installer/amd64/grub/grub.cfg
+ echo '  insmod gfxterm' >> /srv/tftp/debian-installer/amd64/grub/grub.cfg
+ echo '  insmod png' >> /srv/tftp/debian-installer/amd64/grub/grub.cfg
+ echo '  terminal_output gfxterm' >> /srv/tftp/debian-installer/amd64/grub/grub.cfg
+ echo 'fi' >> /srv/tftp/debian-installer/amd64/grub/grub.cfg
+ echo '#' >> /srv/tftp/debian-installer/amd64/grub/grub.cfg
+ echo 'if background_image /isolinux/splash.png; then' >> /srv/tftp/debian-installer/amd64/grub/grub.cfg
+ echo '  set color_normal=light-gray/black' >> /srv/tftp/debian-installer/amd64/grub/grub.cfg
+ echo '  set color_highlight=white/black' >> /srv/tftp/debian-installer/amd64/grub/grub.cfg
+ echo 'else' >> /srv/tftp/debian-installer/amd64/grub/grub.cfg
+ echo '  set menu_color_normal=cyan/blue' >> /srv/tftp/debian-installer/amd64/grub/grub.cfg
+ echo '  set menu_color_highlight=white/blue' >> /srv/tftp/debian-installer/amd64/grub/grub.cfg
+ echo 'fi' >> /srv/tftp/debian-installer/amd64/grub/grub.cfg
+ echo '#' >> /srv/tftp/debian-installer/amd64/grub/grub.cfg
+ echo 'menuentry "Boot default EFI bootloader" {' >> /srv/tftp/debian-installer/amd64/grub/grub.cfg
+ echo ' set background_color=black' >> /srv/tftp/debian-installer/amd64/grub/grub.cfg
+ echo ' regexp -s root "\((.+)\)" "$cmdpath"' >> /srv/tftp/debian-installer/amd64/grub/grub.cfg
+ echo ' chainloader /EFI/Boot/Bootx64.efi' >> /srv/tftp/debian-installer/amd64/grub/grub.cfg
+ echo '}' >> /srv/tftp/debian-installer/amd64/grub/grub.cfg
+ echo '# Установка Astra Linux Special Edition' >> /srv/tftp/debian-installer/amd64/grub/grub.cfg
+ echo "menuentry 'Install Astra Linux SE' {" >> /srv/tftp/debian-installer/amd64/grub/grub.cfg
+ echo '    set background_color=black' >> /srv/tftp/debian-installer/amd64/grub/grub.cfg
+ echo '    linux    /se/linux modprobe.blacklist=evbug debian-installer/allow_unauthenticated=true auto=true priority=critical debian-installer/locale=en_US console-keymaps-at/keymap=ru hostname=astra domain=tyukaloff.org astra-license/license=true url=tftp://192.168.2.253/se/preseed.cfg interface=auto netcfg/dhcp_timeout=60' >> /srv/tftp/debian-installer/amd64/grub/grub.cfg
+ echo '    initrd   /se/initrd.gz' >> /srv/tftp/debian-installer/amd64/grub/grub.cfg
+ echo '}' >> /srv/tftp/debian-installer/amd64/grub/grub.cfg
+
+#Перезапуск служб
+ systemctl restart tftpd-hpa
+ systemctl restart apache2.service
+
+#Настройка автоматической установки ОС с помощью preseed.cfg
+ touch /home/astra/Загрузки/preseed.cfg
+ echo '# настройка языка и страны согласно локали.' >> /home/astra/Загрузки/preseed.cfg
+ echo 'd-i debian-installer/locale string ru_RU' >> /home/astra/Загрузки/preseed.cfg
+ echo 'd-i debian-installer/locale select ru_RU.UTF-8' >> /home/astra/Загрузки/preseed.cfg
+ echo 'd-i debian-installer/language string ru' >> /home/astra/Загрузки/preseed.cfg
+ echo 'd-i debian-installer/country string RU' >> /home/astra/Загрузки/preseed.cfg
+ echo 'd-i debian-installer/keymap string ru' >> /home/astra/Загрузки/preseed.cfg
+ echo '#' >> /home/astra/Загрузки/preseed.cfg
+ echo '# Выбор клавиатуры.' >> /home/astra/Загрузки/preseed.cfg
+ echo 'd-i console-tools/archs select at' >> /home/astra/Загрузки/preseed.cfg
+ echo 'd-i console-keymaps-at/keymap select ru' >> /home/astra/Загрузки/preseed.cfg
+ echo 'd-i console-setup/toggle string Alt+Shift' >> /home/astra/Загрузки/preseed.cfg
+ echo 'd-i console-setup/layoutcode string ru' >> /home/astra/Загрузки/preseed.cfg
+ echo 'd-i keyboard-configuration/toggle select Alt+Shift' >> /home/astra/Загрузки/preseed.cfg
+ echo 'd-i keyboard-configuration/layoutcode string ru' >> /home/astra/Загрузки/preseed.cfg
+ echo 'd-i keyboard-configuration/xkb-keymap select ru' >> /home/astra/Загрузки/preseed.cfg
+ echo 'd-i languagechooser/language-name-fb select Russian' >> /home/astra/Загрузки/preseed.cfg
+ echo 'd-i countrychooser/country-name select Russia' >> /home/astra/Загрузки/preseed.cfg
+ echo '#' >> /home/astra/Загрузки/preseed.cfg
+ echo '# netcfg выберет активный сетевой интерфейс, если такой имеется. Если есть более одного интерфейса, то при данной настройке список интерфейсов выводится не будет.' >> /home/astra/Загрузки/preseed.cfg
+ echo 'd-i netcfg/choose_interface select auto' >> /home/astra/Загрузки/preseed.cfg
+ echo '#' >> /home/astra/Загрузки/preseed.cfg
+ echo '# Чтобы использовать нужный интерфейс:' >> /home/astra/Загрузки/preseed.cfg
+ echo '#d-i netcfg/choose_interface select eth1' >> /home/astra/Загрузки/preseed.cfg
+ echo '#' >> /home/astra/Загрузки/preseed.cfg
+ echo '#non-free,contrib' >> /home/astra/Загрузки/preseed.cfg
+ echo 'd-i apt-setup/non-free boolean true' >> /home/astra/Загрузки/preseed.cfg
+ echo 'd-i apt-setup/contrib boolean true' >> /home/astra/Загрузки/preseed.cfg
+ echo '#' >> /home/astra/Загрузки/preseed.cfg
+ echo '# Имена хоста и домен, назначенные с помощью dhcp имеют приоритет над значениями, установленными здесь. Однако, установка значений всё ещё предотвращает показ вопросов, даже если значения получены от dhcp.' >> /home/astra/Загрузки/preseed.cfg
+ echo 'd-i netcfg/get_hostname string astra' >> /home/astra/Загрузки/preseed.cfg
+ echo 'd-i netcfg/get_hostname seen true' >> /home/astra/Загрузки/preseed.cfg
+ echo 'd-i netcfg/get_domain string cct.rbt' >> /home/astra/Загрузки/preseed.cfg
+ echo '#' >> /home/astra/Загрузки/preseed.cfg
+ echo 'd-i apt-setup/services-select none' >> /home/astra/Загрузки/preseed.cfg
+ echo 'd-i apt-setup/security_host string' >> /home/astra/Загрузки/preseed.cfg
+ echo '#' >> /home/astra/Загрузки/preseed.cfg
+ echo '# Выключить показ надоедливого диалога с WEP ключом.' >> /home/astra/Загрузки/preseed.cfg
+ echo 'd-i netcfg/wireless_wep string' >> /home/astra/Загрузки/preseed.cfg
+ echo '#' >> /home/astra/Загрузки/preseed.cfg
+ echo '# Репозиторий для установки' >> /home/astra/Загрузки/preseed.cfg
+ echo 'd-i mirror/protocol string http' >> /home/astra/Загрузки/preseed.cfg
+ echo 'd-i mirror/country string manual' >> /home/astra/Загрузки/preseed.cfg
+ echo 'd-i mirror/http/hostname string 192.168.2.253' >> /home/astra/Загрузки/preseed.cfg
+ echo 'd-i mirror/http/directory string /repo/se/' >> /home/astra/Загрузки/preseed.cfg
+ echo 'd-i mirror/http/proxy string' >> /home/astra/Загрузки/preseed.cfg
+ echo '#' >> /home/astra/Загрузки/preseed.cfg
+ echo '# Задаёт, установлены или нет аппаратные часы по Гринвичу.' >> /home/astra/Загрузки/preseed.cfg
+ echo 'd-i clock-setup/utc boolean true' >> /home/astra/Загрузки/preseed.cfg
+ echo '#' >> /home/astra/Загрузки/preseed.cfg
+ echo '# Здесь вы можете указать любое допустимое значение для $TZ; смотрите допустимые значения в файле /usr/share/zoneinfo/.' >> /home/astra/Загрузки/preseed.cfg
+ echo 'd-i time/zone string Europe/Yekaterinburg' >> /home/astra/Загрузки/preseed.cfg
+ echo '#' >> /home/astra/Загрузки/preseed.cfg
+ echo 'd-i partman-auto/method string regular' >> /home/astra/Загрузки/preseed.cfg
+ echo '#' >> /home/astra/Загрузки/preseed.cfg
+ echo '# Если один из дисков, который нужно разметить с помощью автоматической разметки, содержит старую конфигурацию LVM, то пользователю выдаётся предупреждение. Ответ можно автоматизировать...' >> /home/astra/Загрузки/preseed.cfg
+ echo 'd-i partman-auto/purge_lvm_from_device boolean true' >> /home/astra/Загрузки/preseed.cfg
+ echo '# И подтвердить запись lvm разделов.' >> /home/astra/Загрузки/preseed.cfg
+ echo 'd-i partman-lvm/confirm boolean true' >> /home/astra/Загрузки/preseed.cfg
+ echo '#' >> /home/astra/Загрузки/preseed.cfg
+ echo '# Для режима UEFI:' >> /home/astra/Загрузки/preseed.cfg
+ echo 'd-i	partman-auto/choose_recipe	select	/lib/partman/recipes-amd64-efi/30atomic' >> /home/astra/Загрузки/preseed.cfg
+ echo '#' >> /home/astra/Загрузки/preseed.cfg
+ echo '# Этот параметр заставляет partman выполнить разметку автоматически без подтверждения.' >> /home/astra/Загрузки/preseed.cfg
+ echo 'd-i partman/confirm_write_new_label boolean true' >> /home/astra/Загрузки/preseed.cfg
+ echo 'd-i partman/choose_partition select finish' >> /home/astra/Загрузки/preseed.cfg
+ echo 'd-i partman/confirm boolean true' >> /home/astra/Загрузки/preseed.cfg
+ echo 'd-i	partman-auto-crypto/erase_disks	boolean	true' >> /home/astra/Загрузки/preseed.cfg
+ echo 'd-i	partman-basicfilesystems/no_swap	boolean	true' >> /home/astra/Загрузки/preseed.cfg
+ echo 'd-i	partman-target/mount_failed	boolean	true' >> /home/astra/Загрузки/preseed.cfg
+ echo 'd-i	partman-partitioning/unknown_label	boolean	true' >> /home/astra/Загрузки/preseed.cfg
+ echo 'd-i	partman-auto/purge_lvm_from_device	string	true' >> /home/astra/Загрузки/preseed.cfg
+ echo 'd-i	partman-lvm/vgdelete_confirm	boolean	true' >> /home/astra/Загрузки/preseed.cfg
+ echo 'd-i	partman/confirm_write_new_label	string	true' >> /home/astra/Загрузки/preseed.cfg
+ echo 'd-i	partman-lvm/confirm	boolean	true' >> /home/astra/Загрузки/preseed.cfg
+ echo 'd-i partman/confirm_nooverwrite boolean true' >> /home/astra/Загрузки/preseed.cfg
+ echo '#' >> /home/astra/Загрузки/preseed.cfg
+ echo '# Устанавливаемый пакет (мета) с образом ядра; можно указать "none", если ядро устанавливать не нужно.' >> /home/astra/Загрузки/preseed.cfg
+ echo 'd-i base-installer/kernel/image string linux-image-generic' >> /home/astra/Загрузки/preseed.cfg
+ echo '#' >> /home/astra/Загрузки/preseed.cfg
+ echo '# Пропустить создание учётной записи суперпользователя (в обычной учётной записи пользователя можно использовать ).' >> /home/astra/Загрузки/preseed.cfg
+ echo '#d-i passwd/root-login boolean false' >> /home/astra/Загрузки/preseed.cfg
+ echo '# Или же пропустить создание обычной учётной записи пользователя.' >> /home/astra/Загрузки/preseed.cfg
+ echo 'd-i passwd/make-user boolean true' >> /home/astra/Загрузки/preseed.cfg
+ echo '#' >> /home/astra/Загрузки/preseed.cfg
+ echo '# Пароль суперпользователя в виде MD5 хеша (12345678)' >> /home/astra/Загрузки/preseed.cfg
+ echo 'd-i passwd/root-password-crypted password $1$CRKr9Agv$OV.6mTXCeMOdDygVQmSlk.' >> /home/astra/Загрузки/preseed.cfg
+ echo '#' >> /home/astra/Загрузки/preseed.cfg
+ echo '# Создать учётную запись обычного пользователя.' >> /home/astra/Загрузки/preseed.cfg
+ echo 'd-i passwd/user-fullname string astra' >> /home/astra/Загрузки/preseed.cfg
+ echo 'd-i passwd/username string astra' >> /home/astra/Загрузки/preseed.cfg
+ echo '#' >> /home/astra/Загрузки/preseed.cfg
+ echo '# Пароль обычного пользователя в виде MD5 хеша (12345678)' >> /home/astra/Загрузки/preseed.cfg
+ echo 'd-i passwd/user-password-crypted password $1$CRKr9Agv$OV.6mTXCeMOdDygVQmSlk.' >> /home/astra/Загрузки/preseed.cfg
+ echo '#' >> /home/astra/Загрузки/preseed.cfg
+ echo '# По умолчанию программа установки требует, чтобы репозитории аутентифицировались с помощью известного ключа gpg. Этот параметр выключает данную аутентификацию.' >> /home/astra/Загрузки/preseed.cfg
+ echo 'd-i debian-installer/allow_unauthenticated string true' >> /home/astra/Загрузки/preseed.cfg
+ echo '#' >> /home/astra/Загрузки/preseed.cfg
+ echo 'tasksel tasksel/first multiselect Base packages, Fly desktop, Internet suite, Office suite, SSH server' >> /home/astra/Загрузки/preseed.cfg
+ echo 'tasksel tasksel/astra-feat-setup multiselect' >> /home/astra/Загрузки/preseed.cfg
+ echo '#' >> /home/astra/Загрузки/preseed.cfg
+ echo 'd-i astra-additional-setup/os-check select Base security level Orel' >> /home/astra/Загрузки/preseed.cfg
+ echo 'd-i astra-additional-setup/additional-settings-orel multiselect Disable ptrace capability' >> /home/astra/Загрузки/preseed.cfg
+ echo '#' >> /home/astra/Загрузки/preseed.cfg
+ echo '#astra-additional-setup	astra-additional-setup/additional-settings	multiselect' >> /home/astra/Загрузки/preseed.cfg
+ echo '#d-i	astra-additional-setup/additional-settings	multiselect' >> /home/astra/Загрузки/preseed.cfg
+ echo '#astra-additional-setup	astra-additional-setup/automatic-network-disable	multiselect' >> /home/astra/Загрузки/preseed.cfg
+ echo '#d-i	astra-additional-setup/automatic-network-disable	multiselect' >> /home/astra/Загрузки/preseed.cfg
+ echo '#d-i desktop-tablet-mode-switch/tablet-mode multiselect' >> /home/astra/Загрузки/preseed.cfg
+ echo '#' >> /home/astra/Загрузки/preseed.cfg
+ echo 'tripwire tripwire/use-localkey boolean false' >> /home/astra/Загрузки/preseed.cfg
+ echo 'ripwire tripwire/use-sitekey boolean false' >> /home/astra/Загрузки/preseed.cfg
+ echo 'tripwire tripwire/installed note ok' >> /home/astra/Загрузки/preseed.cfg
+ echo 'portsentry portsentry/warn_no_block note ok' >> /home/astra/Загрузки/preseed.cfg
+ echo 'astra-license astra-license/license boolean true' >> /home/astra/Загрузки/preseed.cfg
+ echo 'krb5-config krb5-config/kerberos_servers string' >> /home/astra/Загрузки/preseed.cfg
+ echo 'libnss-ldapd libnss-ldapd/ldap-base string' >> /home/astra/Загрузки/preseed.cfg
+ echo 'libnss-ldapd libnss-ldapd/ldap-uris string' >> /home/astra/Загрузки/preseed.cfg
+ echo 'libnss-ldapd libnss-ldapd/nsswitch multiselect services' >> /home/astra/Загрузки/preseed.cfg
+ echo 'ald-client ald-client/make_config boolean false' >> /home/astra/Загрузки/preseed.cfg
+ echo 'ald-client ald-client/manual_configure false' >> /home/astra/Загрузки/preseed.cfg
+ echo 'astra-feat-setup astra-feat-setup/feat multiselect kiosk mode false' >> /home/astra/Загрузки/preseed.cfg
+ echo 'astra-feat-setup astra-feat-setup/feat multiselect Служба ALD false' >> /home/astra/Загрузки/preseed.cfg
+ echo 'd-i console-cyrillic/switch select "Клавиша Menu"' >> /home/astra/Загрузки/preseed.cfg
+ echo 'd-i console-cyrillic/toggle select Control+Shift' >> /home/astra/Загрузки/preseed.cfg
+ echo 'd-i samba-common/dhcp boolean false' >> /home/astra/Загрузки/preseed.cfg
+ echo 'd-i samba-common/workgroup string testgroup1' >> /home/astra/Загрузки/preseed.cfg
+ echo '#' >> /home/astra/Загрузки/preseed.cfg
+ echo '# Некоторые версии программы установки могут отсылать отчёт об установленных пакетах. По умолчанию данная возможность выключена, но отправка отчёта помогает проекту определить популярность программ и какие из них включать на CD.' >> /home/astra/Загрузки/preseed.cfg
+ echo 'popularity-contest popularity-contest/participate boolean false' >> /home/astra/Загрузки/preseed.cfg
+ echo '#' >> /home/astra/Загрузки/preseed.cfg
+ echo '# Эту переменную можно безопасно устанавливать, она указывает, что grub должен устанавливаться в MBR, если на машине не найдено другой операционной системы.' >> /home/astra/Загрузки/preseed.cfg
+ echo 'd-i grub-installer/only_debian boolean true' >> /home/astra/Загрузки/preseed.cfg
+ echo '#' >> /home/astra/Загрузки/preseed.cfg
+ echo '# Это заставляет grub-installer устанавливать в MBR, даже если на машине есть другая ОС, что менее безопасно, так как может привести к отказу загрузки этой другой ОС.' >> /home/astra/Загрузки/preseed.cfg
+ echo 'd-i grub-installer/with_other_os boolean true' >> /home/astra/Загрузки/preseed.cfg
+ echo '#' >> /home/astra/Загрузки/preseed.cfg
+ echo '# Необязательный пароль на grub, или в виде открытого текста в шифрованном виде с помощью хеша MD5, смотрите grub-md5-crypt(P@ssw0rd).' >> /home/astra/Загрузки/preseed.cfg
+ echo 'd-i grub-installer/password-crypted password $1$CRKr9Agv$OV.6mTXCeMOdDygVQmSlk.' >> /home/astra/Загрузки/preseed.cfg
+ echo '#' >> /home/astra/Загрузки/preseed.cfg
+ echo '# Не показывать последнее сообщение о том, что установка завершена.' >> /home/astra/Загрузки/preseed.cfg
+ echo 'd-i finish-install/reboot_in_progress note' >> /home/astra/Загрузки/preseed.cfg
+ echo 'd-i finish-install/exit/poweroff boolean true' >> /home/astra/Загрузки/preseed.cfg
+ echo '#' >> /home/astra/Загрузки/preseed.cfg
+ echo '# Остановить систему после завершения установки, а не перегружаться в установленную систему.' >> /home/astra/Загрузки/preseed.cfg
+ echo '#d-i debian-installer/exit/halt boolean true' >> /home/astra/Загрузки/preseed.cfg
+ echo '# Эта настройка позволяет выключить питание машины, а не просто остановить её.' >> /home/astra/Загрузки/preseed.cfg
+ echo '#d-i debian-installer/exit/poweroff boolean true' >> /home/astra/Загрузки/preseed.cfg
+ echo '#' >> /home/astra/Загрузки/preseed.cfg
+ echo '# Эта команда выполняется перед окончанием установки, пока ещё есть рабочий каталог /target. Вы можете выполнить chroot в /target и непосредственно использовать его, или же воспользоваться командами apt-install и in-target для облегчения задачи установки пакетов и запуска команд в целевой системе.' >> /home/astra/Загрузки/preseed.cfg
+ echo '#d-i preseed/late_command string in-target systemctl enable ssh' >> /home/astra/Загрузки/preseed.cfg
+
+#Копирование настроенного preseed.cfg в папку tftp
+ cp /home/astra/Загрузки/preseed.cfg /srv/tftp/se/preseed.cfg
