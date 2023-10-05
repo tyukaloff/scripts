@@ -1,0 +1,37 @@
+---
+- name: Настройка Astra Linux после установки через PXE
+  hosts: cli  # Группа хостов 
+  become: yes               # Включение прав администратора (sudo)
+
+  tasks:
+    - name: Создать файл /etc/apt/apt.conf
+      copy:
+        content: |
+          #Acquire::proxy "https://10.0.2.14:3128";
+          #Acquire::http::Proxy "http://10.0.2.14:3128";
+        dest: /etc/apt/apt.conf
+      notify: Перезапустить apt
+
+    - name: Очистить файл /etc/apt/sources.list
+      shell: echo -n > /etc/apt/sources.list
+
+    - name: Добавить репозитории в /etc/apt/sources.list
+      blockinfile:
+        path: /etc/apt/sources.list
+        block: |
+          deb https://download.astralinux.ru/astra/stable/1.7_x86-64/repository-main/ 1.7_x86-64 main contrib non-free
+          deb https://download.astralinux.ru/astra/stable/1.7_x86-64/repository-update/ 1.7_x86-64 main contrib non-free
+          deb https://download.astralinux.ru/astra/stable/1.7_x86-64/repository-base/ 1.7_x86-64 main contrib non-free
+          deb https://download.astralinux.ru/astra/stable/1.7_x86-64/repository-extended/ 1.7_x86-64 main contrib non-free
+          deb https://dl.astralinux.ru/astra/frozen/1.7_x86-64/1.7.4/uu/1/repository-update/ 1.7_x86-64 main contrib non-free
+
+    - name: Обновить список пакетов
+      apt:
+        update_cache: yes
+
+    - name: Выполнить полное обновление Astra Linux
+      apt:
+        upgrade: dist
+        update_cache: yes
+        autoremove: yes
+        autoclean: yes
