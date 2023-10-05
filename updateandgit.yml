@@ -1,0 +1,20 @@
+- name: Полное обновление Astra Linux и установка Git
+  hosts: cli  # Группа хостов, на которых будет выполняться задача
+  become: yes                   # Включение прав администратора (sudo)
+
+  tasks:
+    - name: Обновить список пакетов
+      apt:
+        update_cache: yes
+
+    - name: Выполнить полное обновление
+      apt:
+        upgrade: dist
+        update_cache: yes
+        autoremove: yes
+        autoclean: yes
+
+    - name: Установить Git
+      apt:
+        name: git
+        state: present  # Установить пакет, если его нет

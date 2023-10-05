@@ -1,0 +1,15 @@
+- name: Полное обновление Astra Linux
+  hosts: cli  # Группа хостов, на которых будет выполняться задача
+  become: yes                   # Включение прав администратора (sudo)
+
+  tasks:
+    - name: Обновить список пакетов
+      apt:
+        update_cache: yes
+
+    - name: Выполнить полное обновление
+      apt:
+        upgrade: dist
+        update_cache: yes
+        autoremove: yes
+        autoclean: yes

@@ -1,0 +1,13 @@
+- name: Установка Git на клиенты
+  hosts: cli  # Группа хостов, на которых будет выполняться задача
+  become: yes           # Включение прав администратора (sudo)
+
+  tasks:
+    - name: Обновить список пакетов
+      apt:
+        update_cache: yes
+
+    - name: Установить Git
+      apt:
+        name: git
+        state: present  # Установить пакет, если его нет
