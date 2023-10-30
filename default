@@ -1,0 +1,88 @@
+    server {
+   listen 80 default_server;
+    listen [::]:80 default_server;
+    server_name 192.168.2.202;
+    root /var/www/html;
+    index index.php index.nginx-debian.html;
+
+    location / {
+    try_files $uri $uri/ =404;
+    }
+
+    location /upload {
+#
+mirror /mirror_upload_server_server3;
+#
+mirror /mirror_upload_server_server4;
+
+    client_max_body_size 100M; # Максимальный размер файла (по вашему выбору)
+    client_body_temp_path /tmp;
+    # Переадресация к PHP-скрипту
+    try_files $uri $uri/ /upload.php;
+
+    fastcgi_pass unix:/run/php/php7.3-fpm.sock; # Путь к FastCGI сокету PHP
+    include fastcgi_params;
+    fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+    }
+
+    location ~ \.php$ {
+    include snippets/fastcgi-php.conf;
+    fastcgi_pass unix:/run/php/php7.3-fpm.sock;
+    }
+    
+location /mirror_upload_server3 {
+proxy_pass http://192.168.2.203; # Перенаправление на сервер 3
+proxy_set_header Host $host;
+    proxy_set_body off;
+    proxy_max_temp_file_size 0;
+
+    client_max_body_size 100M;
+    client_body_temp_path /var/www/mirror_upload_server3; # Директория для временного хранения файлов
+    }
+
+
+
+
+location /mirror_upload_server4 {
+proxy_pass http://192.168.2.204; # Перенаправление на сервер 4
+proxy_set_header Host $host;
+}
+ 
+}
+	#
+#	location ~ \.php$ {
+#		include snippets/fastcgi-php.conf;
+	#
+	#	# With php-fpm (or other unix sockets):
+#		fastcgi_pass unix:/run/php/php7.3-fpm.sock;
+	#	# With php-cgi (or other tcp sockets):
+	#	fastcgi_pass 127.0.0.1:9000;
+#	}
+
+	# deny access to .htaccess files, if Apache's document root
+	# concurs with nginx's one
+	#
+	#location ~ /\.ht {
+	#	deny all;
+	#}
+#}
+
+
+# Virtual Host configuration for example.com
+#
+# You can move that to a different file under sites-available/ and symlink that
+# to sites-enabled/ to enable it.
+#
+#server {
+#	listen 80;
+#	listen [::]:80;
+#
+#	server_name example.com;
+#
+#	root /var/www/example.com;
+#	index index.html;
+#
+#	location / {
+#		try_files $uri $uri/ =404;
+#	}
+#}

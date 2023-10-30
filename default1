@@ -1,0 +1,29 @@
+
+server {
+	listen 80 default_server;
+	listen [::]:80 default_server;
+
+	root /var/www/html;
+
+	# Add index.php to the list if you are using PHP
+	index index.php index.html index.htm index.nginx-debian.html;
+
+	server_name 192.168.2.203;
+
+	location / {
+		try_files $uri $uri/ =404;
+	}
+
+location /upload {
+client_max_body_size 100M;
+client_body_temp_path /tmp;
+try_files $uri/ /upload.php;
+}
+
+
+	location ~ \.php$ {
+		include snippets/fastcgi-php.conf;
+		fastcgi_pass unix:/run/php/php7.3-fpm.sock;
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+}
+}
